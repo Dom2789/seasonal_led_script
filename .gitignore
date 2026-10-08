@@ -10,3 +10,5 @@ wheels/
 .venv
 
 .idea
+
+seasonal_color.log
