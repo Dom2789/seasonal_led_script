@@ -1,23 +1,26 @@
-import json, sys
-import logger as lg, logging
-import time
-
+import json, sys, time
 import paho.mqtt.client as mqtt
+import logger as lg, logging
+
+r, g, b = map(int, sys.argv[1:4])
+brightness = int(sys.argv[4]) if len(sys.argv) > 4 else 255 # if no brigthness is set, set to 255
 
 BROKER = "192.168.1.225"
 PORT = 1883
-STATE_TOPIC = "home/led_office_1/state"
-COMMAND_TOPIC = "home/led_office_1/set"
 
-TARGET = {"state": "ON", "color": {"r": 255, "g": 0, "b": 80}, "brightness": 200}
+STATE_TOPIC = "led/living/1/state"
+COMMAND_TOPIC = "led/living/1/set"
+
+LAST_WILL = '{"state":"OFF"}'
+TARGET = {"state": "ON", "color": {"r": r, "g": g, "b": b}, "brightness": brightness}
+
 COOLDOWN_S = 5.0                # loop guard: max one command per window
 
-lg.setup_logging("", "seasonal_color")
+lg.setup_logging("", "seasonal_color", debug=True)
 log = logging.getLogger("led-listener")
-_last_sent = 0.0
 
-r, g, b = map(int, sys.argv[1:4])
-brightness = int(sys.argv[4]) if len(sys.argv) > 4 else 255
+_lock = False
+
 
 def matches_target(s: dict) -> bool:
     color = {k: s.get("color", {}).get(k) for k in ("r", "g", "b")}
@@ -37,7 +40,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
 
 
 def on_message(client, userdata, msg):
-    global _last_sent
+    global _lock
     if msg.retain:
         # Old retained state delivered on (re)connect, not a fresh boot report
         log.debug("Ignoring retained state")
@@ -47,23 +50,26 @@ def on_message(client, userdata, msg):
     except (json.JSONDecodeError, UnicodeDecodeError):
         log.warning("Non-JSON state payload: %r", msg.payload)
         return
-
-    if matches_target(state):
-        log.debug("State already matches target")
+    print(msg.payload)
+    if str(msg.payload) == LAST_WILL:
+        _lock = False
+        log.info("unlocked")
         return
 
-    now = time.monotonic()
-    if now - _last_sent < COOLDOWN_S:
-        log.warning("State still differs after command, cooldown active: %s", state)
+    if matches_target(state):
+        log.info("state already matches target")
+        return
+
+    if _lock:
+        log.debug("already locked")
         return
 
     client.publish(COMMAND_TOPIC, json.dumps(TARGET), qos=1, retain=False)
-    _last_sent = now
+    _lock = True
     log.info("State %s -> sent target %s", state, TARGET)
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="led-listener")
     client.on_connect = on_connect
     client.on_message = on_message
@@ -73,7 +79,6 @@ def main():
 
 
 if __name__ == "__main__":
-    log.info("hello log")
-    log.info(f"{r} {g} {b} {brightness}")
-    #main()
+    log.info(TARGET)
+    main()
 
