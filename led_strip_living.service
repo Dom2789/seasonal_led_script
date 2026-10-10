@@ -1,0 +1,12 @@
+[Unit]
+Description=change led-strip to specific color during winter month
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/root/.local/bin/uv run --script /opt/change_color_seasonal/main.py 240 3 252 100
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
