@@ -4,7 +4,14 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/root/.local/bin/uv run --script /opt/change_color_seasonal/main.py 240 3 252 100
+User=root
+Group=root
+WorkingDirectory= /root/seasonal_led_script
+ExecStart=/root/seasonal_led_script/.venv/bin/python /root/seasonal_led_script/main.py 240 3 252 100 /root/logs/
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/root/logs/
+PrivateTmp=true
 Restart=always
 RestartSec=5
 
